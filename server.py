@@ -103,12 +103,45 @@ _gemini_client: Optional[httpx.AsyncClient] = None
 
 
 def _get_gemini_client() -> httpx.AsyncClient:
-    """Get or create a shared httpx client with connection pooling."""
+    """Get or create a shared httpx client with connection pooling and dynamic proxy support."""
     global _gemini_client
     if _gemini_client is None:
+        # Resolve proxy settings from environment variables
+        http_proxy = os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy")
+        https_proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy") or http_proxy
+
+        proxies = {}
+        if http_proxy:
+            proxies["http://"] = http_proxy
+        if https_proxy:
+            proxies["https://"] = https_proxy
+
         limits = httpx.Limits(max_keepalive_connections=10, max_connections=20)
-        _gemini_client = httpx.AsyncClient(timeout=300.0, limits=limits)
+
+        if proxies:
+            logger.info(f"Initializing Gemini Client Pool with Proxies: {proxies}")
+            _gemini_client = httpx.AsyncClient(proxies=proxies, timeout=300.0, limits=limits)
+        else:
+            logger.info("Initializing Gemini Client Pool in Direct Connection Mode (No Proxies)")
+            _gemini_client = httpx.AsyncClient(timeout=300.0, limits=limits)
+
     return _gemini_client
+
+
+def reset_gemini_client():
+    """Close and reset the client pool to apply new proxy or auth configuration immediately."""
+    global _gemini_client
+    if _gemini_client is not None:
+        try:
+            # We run the close in synchronous fallback or background if needed,
+            # but httpx also permits re-assignment and garbage collection.
+            # To be absolutely safe we can simply assign None, garbage collection will clean it up,
+            # or we let async loops safely close it during normal lifespan.
+            _gemini_client = None
+            logger.info("Successfully reset client pool to apply new configuration.")
+        except Exception as e:
+            logger.error(f"Error resetting client pool: {e}")
+            _gemini_client = None
 
 # Gemini OpenAI-compatible endpoint — bypass LiteLLM for direct Google API calls
 GEMINI_OPENAI_BASE_URL = os.environ.get("GEMINI_OPENAI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai")
@@ -1949,9 +1982,170 @@ async def count_tokens(
         logger.error(f"Error counting tokens: {str(e)}\n{error_traceback}")
         raise HTTPException(status_code=500, detail=f"Error counting tokens: {str(e)}")
 
+# --- Configuration Web UI & Backend API ---
+from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+
+# Setup directory for configuration UI
+BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+UI_PATH = os.path.join(BASE_DIR, "ui")
+UI_FILE_PATH = os.path.join(UI_PATH, "index.html")
+
+# Create a local .env configuration updater helper
+def update_env_file(updates: Dict[str, str]):
+    """Saves updates into .env file while keeping other keys intact, and refreshes os.environ."""
+    env_path = os.path.join(os.getcwd(), ".env")
+    lines = []
+
+    # Read existing config
+    existing_config = {}
+    if os.path.exists(env_path):
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                stripped = line.strip()
+                if stripped and not stripped.startswith("#") and "=" in stripped:
+                    k, v = stripped.split("=", 1)
+                    # Clean quotes if any
+                    v = v.strip().strip("'").strip('"')
+                    existing_config[k.strip()] = v
+
+    # Merge updates
+    for k, v in updates.items():
+        existing_config[k] = v
+        # Update current process memory dynamically!
+        os.environ[k] = v
+
+    # Write back clean environment block
+    with open(env_path, "w", encoding="utf-8") as f:
+        f.write("# Generated and Managed by Claude Code Proxy Dashboard\n")
+        for k, v in existing_config.items():
+            f.write(f'{k}="{v}"\n')
+
+    # Trigger global process side-effects refresh
+    global ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, PREFERRED_PROVIDER, BIG_MODEL, SMALL_MODEL, OPENAI_BASE_URL, IS_GEMINI_OPENAI
+    ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+    OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+    GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+    PREFERRED_PROVIDER = os.environ.get("PREFERRED_PROVIDER", "openai").lower()
+    BIG_MODEL = os.environ.get("BIG_MODEL", "gpt-4.1")
+    SMALL_MODEL = os.environ.get("SMALL_MODEL", "gpt-4.1-mini")
+    OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL")
+    IS_GEMINI_OPENAI = OPENAI_BASE_URL and "generativelanguage" in OPENAI_BASE_URL
+
+    # Instantly trigger clients re-creation to bind new tokens or proxy settings
+    reset_gemini_client()
+
+
+class ConfigPayload(BaseModel):
+    gemini_key: str
+    anthropic_key: str = ""
+    preferred_provider: str = "openai"
+    openai_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai"
+    big_model: str = "gemini-3.5-flash"
+    small_model: str = "gemini-3.5-flash"
+    http_proxy: str = ""
+    https_proxy: str = ""
+
+
+class ConnectionTestPayload(BaseModel):
+    gemini_key: str
+    anthropic_key: str = ""
+    http_proxy: str = ""
+    https_proxy: str = ""
+    openai_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai"
+
+
+@app.get("/api/config")
+async def get_config():
+    """Fetch configuration values currently live in processes/env."""
+    return {
+        "gemini_key": os.environ.get("GEMINI_API_KEY", ""),
+        "anthropic_key": os.environ.get("ANTHROPIC_API_KEY", ""),
+        "preferred_provider": os.environ.get("PREFERRED_PROVIDER", "openai"),
+        "openai_base_url": os.environ.get("OPENAI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai"),
+        "big_model": os.environ.get("BIG_MODEL", "gemini-3.5-flash"),
+        "small_model": os.environ.get("SMALL_MODEL", "gemini-3.5-flash"),
+        "http_proxy": os.environ.get("HTTP_PROXY", ""),
+        "https_proxy": os.environ.get("HTTPS_PROXY", "")
+    }
+
+
+@app.post("/api/config")
+async def save_config(cfg: ConfigPayload):
+    """Save configuration to .env and load dynamically into memory."""
+    try:
+        update_env_file({
+            "GEMINI_API_KEY": cfg.gemini_key,
+            "OPENAI_API_KEY": cfg.gemini_key, # Link together for simple client use
+            "ANTHROPIC_API_KEY": cfg.anthropic_key,
+            "PREFERRED_PROVIDER": cfg.preferred_provider,
+            "OPENAI_BASE_URL": cfg.openai_base_url,
+            "BIG_MODEL": cfg.big_model,
+            "SMALL_MODEL": cfg.small_model,
+            "HTTP_PROXY": cfg.http_proxy,
+            "HTTPS_PROXY": cfg.https_proxy
+        })
+        return {"status": "success", "message": "Settings saved and loaded dynamically"}
+    except Exception as e:
+        logger.error(f"Error saving config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/config/test-connection")
+async def test_connection(payload: ConnectionTestPayload):
+    """Run dynamic connection test directly with custom proxies and keys without saving."""
+    proxies = {}
+    if payload.http_proxy:
+        proxies["http://"] = payload.http_proxy
+    if payload.https_proxy:
+        proxies["https://"] = payload.https_proxy
+    elif payload.http_proxy:
+        proxies["https://"] = payload.http_proxy # Fallback
+
+    diagnostic_results = {
+        "gemini": {"status": "failed", "message": "Not run"},
+        "proxy_status": "inactive",
+        "proxy_type": "direct"
+    }
+
+    if proxies:
+        diagnostic_results["proxy_status"] = "active"
+        diagnostic_results["proxy_type"] = "socks/http"
+
+    # We build a temporary client specifically to test connection.
+    # We do NOT reuse the global pool to avoid poisoning or cache hit false-positive.
+    async with httpx.AsyncClient(proxies=proxies, timeout=12.0) as client:
+        try:
+            # We fetch a simple metadata check using the Google base url or customized base url
+            test_url = payload.openai_base_url.replace("/openai", "") if "/openai" in payload.openai_base_url else payload.openai_base_url
+
+            # Formulate endpoint ping
+            headers = {}
+            if payload.gemini_key:
+                headers["Authorization"] = f"Bearer {payload.gemini_key}"
+
+            resp = await client.get(f"{test_url}/models", headers=headers)
+            diagnostic_results["gemini"] = {
+                "status": "success" if resp.status_code in [200, 401, 403] else "failed",
+                "code": resp.status_code,
+                "message": "握手检测成功" if resp.status_code in [200, 401, 403] else f"HTTP 错误 {resp.status_code}"
+            }
+        except Exception as e:
+            diagnostic_results["gemini"] = {
+                "status": "failed",
+                "message": str(e)
+            }
+
+    return diagnostic_results
+
+
 @app.get("/")
-async def root():
-    return {"message": "Anthropic Proxy for LiteLLM"}
+async def root(request: Request):
+    """Routes back HTTP browser to local Dashboard, while keeping JSON APIs intact."""
+    accept = request.headers.get("Accept", "")
+    if "text/html" in accept and os.path.exists(UI_FILE_PATH):
+        return FileResponse(UI_FILE_PATH)
+    return {"message": "Anthropic Proxy for LiteLLM with Web-UI Management"}
 
 # Define ANSI color codes for terminal output
 class Colors:
