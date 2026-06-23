@@ -90,6 +90,7 @@ async def shutdown_event():
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+PROXY_ENABLED = os.environ.get("PROXY_ENABLED", "false").lower() == "true"
 
 # Get Vertex AI project and location from environment (if set)
 VERTEX_PROJECT = os.environ.get("VERTEX_PROJECT", "unset")
@@ -1599,6 +1600,10 @@ async def create_message(
     raw_request: Request
 ):
     try:
+        # Proxy enabled guard — refuse request when switch is off
+        if not PROXY_ENABLED:
+            raise HTTPException(status_code=503, detail="Proxy is disabled. Enable it via the configuration panel first.")
+
         # print the body here
         body = await raw_request.body()
     
@@ -2022,7 +2027,7 @@ def update_env_file(updates: Dict[str, str]):
             f.write(f'{k}="{v}"\n')
 
     # Trigger global process side-effects refresh
-    global ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, PREFERRED_PROVIDER, BIG_MODEL, SMALL_MODEL, OPENAI_BASE_URL, IS_GEMINI_OPENAI
+    global ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, PREFERRED_PROVIDER, BIG_MODEL, SMALL_MODEL, OPENAI_BASE_URL, IS_GEMINI_OPENAI, PROXY_ENABLED
     ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
     OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
@@ -2031,13 +2036,14 @@ def update_env_file(updates: Dict[str, str]):
     SMALL_MODEL = os.environ.get("SMALL_MODEL", "gpt-4.1-mini")
     OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL")
     IS_GEMINI_OPENAI = OPENAI_BASE_URL and "generativelanguage" in OPENAI_BASE_URL
+    PROXY_ENABLED = os.environ.get("PROXY_ENABLED", "false").lower() == "true"
 
     # Instantly trigger clients re-creation to bind new tokens or proxy settings
     reset_gemini_client()
 
 
 class ConfigPayload(BaseModel):
-    gemini_key: str
+    gemini_key: str = ""
     anthropic_key: str = ""
     preferred_provider: str = "openai"
     openai_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai"
@@ -2045,6 +2051,8 @@ class ConfigPayload(BaseModel):
     small_model: str = "gemini-3.5-flash"
     http_proxy: str = ""
     https_proxy: str = ""
+    proxy_enabled: bool = False
+    proxy_port: int = 8082
 
 
 class ConnectionTestPayload(BaseModel):
@@ -2066,7 +2074,9 @@ async def get_config():
         "big_model": os.environ.get("BIG_MODEL", "gemini-3.5-flash"),
         "small_model": os.environ.get("SMALL_MODEL", "gemini-3.5-flash"),
         "http_proxy": os.environ.get("HTTP_PROXY", ""),
-        "https_proxy": os.environ.get("HTTPS_PROXY", "")
+        "https_proxy": os.environ.get("HTTPS_PROXY", ""),
+        "proxy_enabled": os.environ.get("PROXY_ENABLED", "false").lower() == "true",
+        "proxy_port": int(os.environ.get("PROXY_PORT", "8082"))
     }
 
 
@@ -2076,14 +2086,16 @@ async def save_config(cfg: ConfigPayload):
     try:
         update_env_file({
             "GEMINI_API_KEY": cfg.gemini_key,
-            "OPENAI_API_KEY": cfg.gemini_key, # Link together for simple client use
+            "OPENAI_API_KEY": cfg.gemini_key,
             "ANTHROPIC_API_KEY": cfg.anthropic_key,
             "PREFERRED_PROVIDER": cfg.preferred_provider,
             "OPENAI_BASE_URL": cfg.openai_base_url,
             "BIG_MODEL": cfg.big_model,
             "SMALL_MODEL": cfg.small_model,
             "HTTP_PROXY": cfg.http_proxy,
-            "HTTPS_PROXY": cfg.https_proxy
+            "HTTPS_PROXY": cfg.https_proxy,
+            "PROXY_ENABLED": "true" if cfg.proxy_enabled else "false",
+            "PROXY_PORT": str(cfg.proxy_port)
         })
         return {"status": "success", "message": "Settings saved and loaded dynamically"}
     except Exception as e:

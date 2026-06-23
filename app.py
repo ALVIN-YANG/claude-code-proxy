@@ -11,7 +11,7 @@ from typing import Dict, Any
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from server import app, logger, get_config, save_config, test_connection, ConfigPayload, ConnectionTestPayload
 
-PORT = 8082
+PORT = int(os.environ.get("PROXY_PORT", "8082"))
 
 def get_resource_path(relative_path):
     """Locate assets securely when compiled under PyInstaller (_MEIPASS) or running locally."""
