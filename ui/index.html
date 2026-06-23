@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Claude Code Proxy Dashboard</title>
+    <title>Claude Code Proxy 极简控制面板</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -14,263 +14,115 @@
             font-family: 'JetBrains Mono', monospace;
         }
     </style>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        brand: {
-                            50: '#ecfdf5',
-                            100: '#d1fae5',
-                            500: '#10b981',
-                            600: '#059669',
-                            700: '#047857',
-                        }
-                    }
-                }
-            }
-        }
-    </script>
 </head>
-<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col">
-    <!-- Navbar -->
-    <header class="border-b border-gray-800 bg-gray-900/80 backdrop-blur sticky top-0 z-10">
-        <div class="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex justify-between items-center">
-            <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 rounded-xl bg-brand-500 flex items-center justify-center shadow-lg shadow-brand-500/20">
-                    <span class="text-xl font-bold text-gray-900">♊</span>
-                </div>
-                <div>
-                    <h1 class="text-lg font-bold tracking-tight text-white flex items-center">
-                        Claude Code Proxy
-                        <span class="ml-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-500/10 text-brand-500 border border-brand-500/20">v1.1.0</span>
-                    </h1>
-                    <p class="text-xs text-gray-400">Gemini 3.5 极速高兼容中转代理</p>
-                </div>
+<body class="bg-gray-950 text-gray-100 min-h-screen flex flex-col justify-center items-center p-4 select-none">
+
+    <!-- 极简卡片容器 -->
+    <div class="w-full max-w-lg bg-gray-900 border border-gray-800 rounded-3xl p-8 shadow-2xl space-y-6">
+
+        <!-- 头部 LOGO 与标题 -->
+        <div class="flex items-center space-x-4 border-b border-gray-800 pb-5">
+            <div class="w-12 h-12 rounded-2xl bg-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                <span class="text-2xl">♊</span>
             </div>
-            <div class="flex items-center space-x-4">
-                <span id="backend-status" class="flex items-center text-xs px-2.5 py-1 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">
-                    <span class="w-2 h-2 rounded-full bg-red-500 mr-2 animate-pulse"></span>
-                    未连接
-                </span>
-            </div>
-        </div>
-    </header>
-
-    <!-- Main Content -->
-    <main class="flex-grow max-w-5xl mx-auto px-4 sm:px-6 py-8 w-full grid grid-cols-1 md:grid-cols-3 gap-8">
-        <!-- Configuration Form -->
-        <div class="md:col-span-2 space-y-6">
-            <div class="bg-gray-800/50 border border-gray-800 rounded-2xl p-6 shadow-xl backdrop-blur-sm">
-                <h2 class="text-xl font-semibold mb-6 flex items-center text-white border-b border-gray-800 pb-3">
-                    ⚙️ 代理设置 & API 密钥配置
-                </h2>
-
-                <form id="config-form" class="space-y-6">
-                    <!-- GEMINI_API_KEY -->
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-300 mb-2 flex justify-between">
-                            <span>Gemini API Key (推荐使用 OpenAI 格式端点)</span>
-                            <span class="text-xs text-brand-500 font-normal">必填，支持 AIzaSy... 格式</span>
-                        </label>
-                        <div class="relative">
-                            <input type="password" id="gemini-key" class="w-full bg-gray-950/60 border border-gray-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-500 text-white transition-all duration-200" placeholder="AIzaSy...">
-                            <button type="button" onclick="togglePassword('gemini-key')" class="absolute right-3 top-3.5 text-gray-500 hover:text-gray-300 text-xs">显示</button>
-                        </div>
-                    </div>
-
-                    <!-- ANTHROPIC_API_KEY -->
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-300 mb-2 flex justify-between">
-                            <span>Anthropic API Key</span>
-                            <span class="text-xs text-gray-500 font-normal">可选，留空将无法透传直连 Anthropic 官方</span>
-                        </label>
-                        <div class="relative">
-                            <input type="password" id="anthropic-key" class="w-full bg-gray-950/60 border border-gray-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-500 text-white transition-all duration-200" placeholder="sk-ant-...">
-                            <button type="button" onclick="togglePassword('anthropic-key')" class="absolute right-3 top-3.5 text-gray-500 hover:text-gray-300 text-xs">显示</button>
-                        </div>
-                    </div>
-
-                    <!-- Provider & Models Config Group -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">首选供应商 (Preferred Provider)</label>
-                            <select id="preferred-provider" class="w-full bg-gray-950/60 border border-gray-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-500 text-white transition-all duration-200">
-                                <option value="openai">Direct Google (OpenAI 格式 - 极其稳定)</option>
-                                <option value="vertex_ai">Google Cloud Vertex AI</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">OpenAI Base URL</label>
-                            <input type="text" id="openai-base-url" class="w-full bg-gray-950/60 border border-gray-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-500 text-white transition-all duration-200" placeholder="https://generativelanguage.googleapis.com/v1beta/openai">
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">大模型映射 (用于 Claude Opus)</label>
-                            <input type="text" id="big-model" class="w-full bg-gray-950/60 border border-gray-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-500 text-white transition-all duration-200" placeholder="gemini-3.5-flash">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">小模型映射 (用于 Claude Haiku)</label>
-                            <input type="text" id="small-model" class="w-full bg-gray-950/60 border border-gray-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-500 text-white transition-all duration-200" placeholder="gemini-3.5-flash">
-                        </div>
-                    </div>
-
-                    <!-- Network Proxy Configuration -->
-                    <div class="border-t border-gray-800/80 pt-6">
-                        <h3 class="text-sm font-semibold uppercase tracking-wider text-brand-500 mb-4">🌐 网络代理设置 (解决国内网络问题)</h3>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-xs text-gray-400 mb-2">HTTP / SOCKS5 代理地址</label>
-                                <input type="text" id="http-proxy" class="w-full bg-gray-950/60 border border-gray-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-500 text-white transition-all duration-200" placeholder="例如 http://127.0.0.1:7890 或 socks5://127.0.0.1:7890">
-                            </div>
-                            <div>
-                                <label class="block text-xs text-gray-400 mb-2">HTTPS 代理地址 (留空则默认复用 HTTP 代理)</label>
-                                <input type="text" id="https-proxy" class="w-full bg-gray-950/60 border border-gray-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-500 text-white transition-all duration-200" placeholder="例如 http://127.0.0.1:7890">
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Actions -->
-                    <div class="flex justify-end space-x-4 pt-4 border-t border-gray-800/80">
-                        <button type="button" onclick="testConnection()" class="px-5 py-3 rounded-xl border border-gray-700 font-semibold text-sm hover:bg-gray-800 active:bg-gray-700 transition duration-150">
-                            ⚡ 测试网络联通性
-                        </button>
-                        <button type="submit" class="px-6 py-3 rounded-xl bg-brand-500 text-gray-900 font-bold text-sm hover:bg-brand-600 active:bg-brand-700 transition duration-150 shadow-lg shadow-brand-500/10">
-                            💾 保存配置
-                        </button>
-                    </div>
-                </form>
+            <div>
+                <h1 class="text-lg font-bold text-white tracking-tight">Claude Code 极速中转面板</h1>
+                <p class="text-xs text-gray-400">Gemini 3.5 极简高兼容本地中转桥</p>
             </div>
         </div>
 
-        <!-- Status & Diagnostic panel -->
-        <div class="space-y-6">
-            <div class="bg-gray-800/50 border border-gray-800 rounded-2xl p-6 shadow-xl backdrop-blur-sm flex flex-col h-full">
-                <h2 class="text-xl font-semibold mb-6 text-white border-b border-gray-800 pb-3">
-                    🔍 系统诊断与状态
-                </h2>
+        <!-- 极简配置表单 -->
+        <form id="config-form" class="space-y-5">
 
-                <!-- Status Cards -->
-                <div class="space-y-4">
-                    <!-- Google Gemini Connect -->
-                    <div class="p-4 rounded-xl bg-gray-950/40 border border-gray-800/60 flex items-center justify-between">
-                        <div class="space-y-1">
-                            <span class="text-xs uppercase tracking-wider text-gray-500 font-semibold">Gemini 服务端连通性</span>
-                            <div id="diag-gemini-msg" class="text-sm font-medium text-gray-400">未测试</div>
-                        </div>
-                        <div id="diag-gemini-dot" class="w-3 h-3 rounded-full bg-gray-700 shadow"></div>
-                    </div>
-
-                    <!-- Local Proxy Core Status -->
-                    <div class="p-4 rounded-xl bg-gray-950/40 border border-gray-800/60 flex items-center justify-between">
-                        <div class="space-y-1">
-                            <span class="text-xs uppercase tracking-wider text-gray-500 font-semibold">本地中转代理核心</span>
-                            <div id="diag-local-msg" class="text-sm font-medium text-gray-400">正在获取...</div>
-                        </div>
-                        <div id="diag-local-dot" class="w-3 h-3 rounded-full bg-gray-700 shadow animate-pulse"></div>
-                    </div>
-
-                    <!-- Client Proxy Integration -->
-                    <div class="p-4 rounded-xl bg-gray-950/40 border border-gray-800/60 flex items-center justify-between">
-                        <div class="space-y-1">
-                            <span class="text-xs uppercase tracking-wider text-gray-500 font-semibold">当前本地代理模式</span>
-                            <div id="diag-proxy-msg" class="text-sm font-medium text-gray-400">直连模式 (未启用)</div>
-                        </div>
-                        <div id="diag-proxy-dot" class="w-3 h-3 rounded-full bg-gray-700 shadow"></div>
-                    </div>
-                </div>
-
-                <!-- Guidance Info -->
-                <div class="mt-6 p-4 rounded-xl bg-brand-500/5 border border-brand-500/15 text-xs text-gray-300 leading-relaxed space-y-2">
-                    <p class="font-bold text-brand-500">💡 如何对接 Claude Code CLI：</p>
-                    <p>1. 启动本程序（在后台静默运行并缩至系统托盘）。</p>
-                    <p>2. 打开命令行，在您的项目目录下执行：</p>
-                    <p class="mono bg-gray-950/80 px-2 py-1 rounded text-gray-400 select-all border border-gray-800">cc-switch</p>
-                    <p>3. 新增自定义提供商，将 Base URL 设定为 <span class="text-emerald-400">http://127.0.0.1:8082</span> 即可无缝享受极速无挂起的 Gemini 3.5 高效体验！</p>
+            <!-- Gemini Key -->
+            <div class="space-y-2">
+                <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider">Gemini API Key (AIzaSy...)</label>
+                <div class="relative">
+                    <input type="password" id="gemini-key" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-emerald-500 text-white transition duration-150" placeholder="请输入您的 Gemini 密钥">
+                    <button type="button" onclick="togglePassword('gemini-key')" class="absolute right-3 top-3.5 text-xs text-gray-500 hover:text-gray-300">显示</button>
                 </div>
             </div>
-        </div>
-    </main>
 
-    <!-- Toast Notifications -->
+            <!-- Anthropic Key (可选) -->
+            <div class="space-y-2">
+                <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider">Anthropic API Key (可选)</label>
+                <div class="relative">
+                    <input type="password" id="anthropic-key" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-emerald-500 text-white transition duration-150" placeholder="留空则不开启官方通道透传">
+                    <button type="button" onclick="togglePassword('anthropic-key')" class="absolute right-3 top-3.5 text-xs text-gray-500 hover:text-gray-300">显示</button>
+                </div>
+            </div>
+
+            <!-- 本地网络代理 -->
+            <div class="space-y-2">
+                <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider">网络代理 (解决国内无法直连 Google)</label>
+                <input type="text" id="http-proxy" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-emerald-500 text-white transition duration-150" placeholder="例如 http://127.0.0.1:7890">
+            </div>
+
+            <!-- 网络诊断联通状态卡片 -->
+            <div class="grid grid-cols-2 gap-4 pt-2">
+                <div class="p-3 rounded-xl bg-gray-950 border border-gray-800 flex items-center justify-between">
+                    <div class="text-xs text-gray-400">Gemini 连通性</div>
+                    <div id="diag-gemini-dot" class="w-2.5 h-2.5 rounded-full bg-gray-700 shadow"></div>
+                </div>
+                <div class="p-3 rounded-xl bg-gray-950 border border-gray-800 flex items-center justify-between">
+                    <div class="text-xs text-gray-400">代理状态</div>
+                    <div id="diag-proxy-dot" class="w-2.5 h-2.5 rounded-full bg-gray-700 shadow"></div>
+                </div>
+            </div>
+
+            <div id="diag-msg-box" class="hidden p-3 rounded-xl bg-red-950/20 border border-red-900/30 text-[10px] text-red-400 font-mono overflow-auto max-h-24"></div>
+
+            <!-- 操作按钮 -->
+            <div class="flex flex-col space-y-3 pt-4 border-t border-gray-800">
+                <button type="button" onclick="testConnection()" class="w-full py-3 rounded-xl border border-gray-700 text-sm font-semibold hover:bg-gray-800 active:bg-gray-700 transition duration-150 flex justify-center items-center">
+                    ⚡ 测试网络联通性
+                </button>
+                <button type="submit" id="save-btn" disabled class="w-full py-3.5 rounded-xl bg-gray-800 text-gray-400 font-bold text-sm cursor-not-allowed transition duration-150 shadow-lg" title="请先测试网络联通性，绿灯通过后方可保存应用">
+                    💾 保存并启用本地代理
+                </button>
+                <p id="save-tip" class="text-center text-[10px] text-yellow-500/80 leading-normal">
+                    ⚠️ 安全提醒：请先点击上方的「测试网络联通性」，检测完全通过后才可以点击保存。
+                </p>
+            </div>
+        </form>
+    </div>
+
+    <!-- Toast 弹窗 -->
     <div id="toast-container" class="fixed bottom-5 right-5 space-y-2 z-50"></div>
 
     <script>
-        const API_BASE = ""; // 使用相对路径
-
         function togglePassword(id) {
             const el = document.getElementById(id);
-            if (el.type === 'password') {
-                el.type = 'text';
-            } else {
-                el.type = 'password';
-            }
+            el.type = el.type === 'password' ? 'text' : 'password';
         }
 
         function showToast(message, type = 'success') {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
-            toast.className = `p-4 rounded-xl border flex items-center justify-between text-sm shadow-xl transition-all duration-300 transform translate-y-2 opacity-0 max-w-sm ${
-                type === 'success'
-                    ? 'bg-emerald-950 border-emerald-800 text-emerald-200'
-                    : 'bg-red-950 border-red-800 text-red-200'
+            toast.className = `p-4 rounded-xl border flex items-center justify-between text-xs shadow-xl transition-all duration-300 transform translate-y-2 opacity-0 max-w-sm ${
+                type === 'success' ? 'bg-emerald-950 border-emerald-800 text-emerald-200' : 'bg-red-950 border-red-800 text-red-200'
             }`;
-            toast.innerHTML = `
-                <span>${message}</span>
-                <button onclick="this.parentElement.remove()" class="ml-4 text-xs opacity-60 hover:opacity-100">✕</button>
-            `;
+            toast.innerHTML = `<span>${message}</span><button onclick="this.parentElement.remove()" class="ml-4 opacity-60 hover:opacity-100">✕</button>`;
             container.appendChild(toast);
-
-            // Trigger animation
-            setTimeout(() => {
-                toast.classList.remove('translate-y-2', 'opacity-0');
-            }, 10);
-
-            // Auto dismiss
-            setTimeout(() => {
-                toast.classList.add('opacity-0', 'translate-y-2');
-                setTimeout(() => toast.remove(), 300);
-            }, 4000);
+            setTimeout(() => toast.remove(), 4000);
+            setTimeout(() => toast.classList.remove('translate-y-2', 'opacity-0'), 10);
         }
 
         async function fetchConfig() {
             try {
                 let data;
-                // Dual-mode high compatibility: check if executing inside Native pywebview window container
                 if (window.pywebview && window.pywebview.api) {
                     data = await window.pywebview.api.get_config();
                 } else {
-                    const r = await fetch(`${API_BASE}/api/config`);
-                    if (!r.ok) throw new Error('无法连接至中转代理服务');
+                    const r = await fetch("/api/config");
                     data = await r.json();
                 }
-
                 document.getElementById('gemini-key').value = data.gemini_key || '';
                 document.getElementById('anthropic-key').value = data.anthropic_key || '';
-                document.getElementById('preferred-provider').value = data.preferred_provider || 'openai';
-                document.getElementById('openai-base-url').value = data.openai_base_url || '';
-                document.getElementById('big-model').value = data.big_model || '';
-                document.getElementById('small-model').value = data.small_model || '';
                 document.getElementById('http-proxy').value = data.http_proxy || '';
-                document.getElementById('https-proxy').value = data.https_proxy || '';
-
-                // 更新前端连接状态
-                document.getElementById('backend-status').className = "flex items-center text-xs px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
-                document.getElementById('backend-status').innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500 mr-2 animate-pulse"></span>已连接 (Native 桌面)';
-
-                document.getElementById('diag-local-msg').textContent = "正在运行 (端口 8082)";
-                document.getElementById('diag-local-dot').className = "w-3 h-3 rounded-full bg-emerald-500 shadow-md shadow-emerald-500/20";
             } catch (err) {
                 console.error(err);
-                document.getElementById('backend-status').className = "flex items-center text-xs px-2.5 py-1 rounded-full bg-red-500/10 text-red-400 border border-red-500/20";
-                document.getElementById('backend-status').innerHTML = '<span class="w-2 h-2 rounded-full bg-red-500 mr-2"></span>未连接';
-
-                document.getElementById('diag-local-msg').textContent = "握手连接失败";
-                document.getElementById('diag-local-dot').className = "w-3 h-3 rounded-full bg-red-500 shadow-md shadow-red-500/20";
-                showToast("无法建立与本地中转服务的握手连接，请检查后台进程是否存活。", "error");
+                showToast("无法获取初始配置，请确认代理核心后台运行正常。", "error");
             }
         }
 
@@ -279,12 +131,13 @@
             const payload = {
                 gemini_key: document.getElementById('gemini-key').value,
                 anthropic_key: document.getElementById('anthropic-key').value,
-                preferred_provider: document.getElementById('preferred-provider').value,
-                openai_base_url: document.getElementById('openai-base-url').value,
-                big_model: document.getElementById('big-model').value,
-                small_model: document.getElementById('small-model').value,
                 http_proxy: document.getElementById('http-proxy').value,
-                https_proxy: document.getElementById('https-proxy').value,
+                // 内部高级参数我们默认写死最佳实践，给用户极致清爽的视觉
+                preferred_provider: "openai",
+                openai_base_url: "https://generativelanguage.googleapis.com/v1beta/openai",
+                big_model: "gemini-3.5-flash",
+                small_model: "gemini-3.5-flash",
+                https_proxy: document.getElementById('http-proxy').value
             };
 
             try {
@@ -292,17 +145,17 @@
                     const res = await window.pywebview.api.save_config(payload);
                     if (res.status === "error") throw new Error(res.message);
                 } else {
-                    const r = await fetch(`${API_BASE}/api/config`, {
+                    const r = await fetch("/api/config", {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
                     });
-                    if (!r.ok) throw new Error('保存配置失败');
+                    if (!r.ok) throw new Error('保存配置接口失败');
                 }
-                showToast("配置已成功更新并生效！");
+                showToast("本地中转配置保存成功，代理已瞬间重载生效！");
                 fetchConfig();
             } catch (err) {
-                showToast("保存配置失败：" + err.message, "error");
+                showToast("保存配置发生异常：" + err.message, "error");
             }
         });
 
@@ -311,23 +164,21 @@
                 gemini: document.getElementById('diag-gemini-dot'),
                 proxy: document.getElementById('diag-proxy-dot')
             };
-            const msgs = {
-                gemini: document.getElementById('diag-gemini-msg'),
-                proxy: document.getElementById('diag-proxy-msg')
-            };
+            const saveBtn = document.getElementById('save-btn');
+            const saveTip = document.getElementById('save-tip');
+            const msgBox = document.getElementById('diag-msg-box');
 
-            // 设为加载状态
-            dots.gemini.className = "w-3 h-3 rounded-full bg-yellow-500 shadow animate-pulse";
-            msgs.gemini.textContent = "测试中...";
-            dots.proxy.className = "w-3 h-3 rounded-full bg-yellow-500 shadow animate-pulse";
-            msgs.proxy.textContent = "测试中...";
+            // 载入状态
+            dots.gemini.className = "w-2.5 h-2.5 rounded-full bg-yellow-500 animate-pulse";
+            dots.proxy.className = "w-2.5 h-2.5 rounded-full bg-yellow-500 animate-pulse";
+            msgBox.classList.add('hidden');
 
             const payload = {
                 gemini_key: document.getElementById('gemini-key').value,
                 anthropic_key: document.getElementById('anthropic-key').value,
                 http_proxy: document.getElementById('http-proxy').value,
-                https_proxy: document.getElementById('https-proxy').value,
-                openai_base_url: document.getElementById('openai-base-url').value
+                https_proxy: document.getElementById('http-proxy').value,
+                openai_base_url: "https://generativelanguage.googleapis.com/v1beta/openai"
             };
 
             try {
@@ -335,46 +186,56 @@
                 if (window.pywebview && window.pywebview.api) {
                     res = await window.pywebview.api.test_connection(payload);
                 } else {
-                    const r = await fetch(`${API_BASE}/api/config/test-connection`, {
+                    const r = await fetch("/api/config/test-connection", {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
                     });
-                    if (!r.ok) throw new Error("测试连接发生异常");
+                    if (!r.ok) throw new Error("测试诊断请求异常");
                     res = await r.json();
                 }
 
-                // 更新 Gemini 连接诊断
+                // 处理 Gemini 诊断结果
                 if (res.gemini.status === "success") {
-                    dots.gemini.className = "w-3 h-3 rounded-full bg-emerald-500 shadow-md shadow-emerald-500/20";
-                    msgs.gemini.textContent = `成功联通 (HTTP ${res.gemini.code})`;
+                    dots.gemini.className = "w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-md shadow-emerald-500/20";
+
+                    // 只有在 Gemini 连接 100% 成功的情况下才解锁保存配置按钮，保护用户不配错代理
+                    saveBtn.disabled = false;
+                    saveBtn.className = "w-full py-3.5 rounded-xl bg-emerald-500 text-gray-900 font-bold text-sm hover:bg-emerald-600 active:bg-emerald-700 transition duration-150 shadow-lg shadow-emerald-500/10 cursor-pointer";
+                    saveBtn.title = "检测通过，可以保存";
+                    saveTip.className = "text-center text-[10px] text-emerald-400 leading-normal";
+                    saveTip.textContent = "🎉 检测已全部通过，可以安全点击上方按钮保存配置了！";
                 } else {
-                    dots.gemini.className = "w-3 h-3 rounded-full bg-red-500 shadow-md shadow-red-500/20";
-                    msgs.gemini.textContent = "无法连通 API";
-                    console.error("Gemini Connect Error:", res.gemini.message);
+                    dots.gemini.className = "w-2.5 h-2.5 rounded-full bg-red-500 shadow-md shadow-red-500/20";
+                    saveBtn.disabled = true;
+                    saveBtn.className = "w-full py-3.5 rounded-xl bg-gray-800 text-gray-400 font-bold text-sm cursor-not-allowed transition duration-150 shadow-lg";
+                    saveTip.className = "text-center text-[10px] text-red-400 leading-normal";
+                    saveTip.textContent = "❌ 诊断失败：无法连通远端服务。请先配置正确的本地网络代理。";
+
+                    // 显示具体错误日志，供用户排查代理或者是 API Key 配错
+                    msgBox.classList.remove('hidden');
+                    msgBox.textContent = "诊断详情: " + (res.gemini.message || "未知连接错误，请检查代理端口");
                 }
 
-                // 更新本地代理设置状态
+                // 代理路径指示
                 if (res.proxy_status === "active") {
-                    dots.proxy.className = "w-3 h-3 rounded-full bg-emerald-500 shadow-md shadow-emerald-500/20";
-                    msgs.proxy.textContent = `中转可用 (${res.proxy_type})`;
+                    dots.proxy.className = "w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-md shadow-emerald-500/20";
                 } else {
-                    dots.proxy.className = "w-3 h-3 rounded-full bg-gray-700 shadow";
-                    msgs.proxy.textContent = "直连模式 (不通过代理)";
+                    dots.proxy.className = "w-2.5 h-2.5 rounded-full bg-gray-600 shadow";
                 }
 
                 if (res.gemini.status === "success") {
-                    showToast("网络诊断成功，所有远端连接及代理路径均畅通！");
+                    showToast("网络诊断成功，本地代理通道完全畅通！");
                 } else {
-                    showToast("诊断结束，但与 Google 官方服务器握手失败，请检查网络代理。", "error");
+                    showToast("与 Google 握手连接失败，保存按钮已被锁闭。", "error");
                 }
 
             } catch (err) {
-                dots.gemini.className = "w-3 h-3 rounded-full bg-red-500 shadow";
-                msgs.gemini.textContent = "测试发生错误";
-                dots.proxy.className = "w-3 h-3 rounded-full bg-red-500 shadow";
-                msgs.proxy.textContent = "测试发生错误";
-                showToast("测试请求执行失败，请检查后台中转核心状态。", "error");
+                dots.gemini.className = "w-2.5 h-2.5 rounded-full bg-red-500 shadow";
+                dots.proxy.className = "w-2.5 h-2.5 rounded-full bg-red-500 shadow";
+                saveBtn.disabled = true;
+                saveBtn.className = "w-full py-3.5 rounded-xl bg-gray-800 text-gray-400 font-bold text-sm cursor-not-allowed transition duration-150 shadow-lg";
+                showToast("测试请求执行失败，请检查中转核心状态。", "error");
             }
         }
 
@@ -383,11 +244,7 @@
             fetchConfig();
         } else {
             window.addEventListener('pywebviewready', fetchConfig);
-            setTimeout(() => {
-                if (!window.pywebview) {
-                    fetchConfig();
-                }
-            }, 600);
+            setTimeout(() => { if (!window.pywebview) fetchConfig(); }, 600);
         }
     </script>
 </body>

@@ -112,11 +112,11 @@ def start_gui():
     # Initialize pywebview window
     # WKWebView (Mac) or WebView2 (Windows Edge/Chromium)
     window = webview.create_window(
-        title="Claude Code Proxy Configurator",
+        title="Claude Code Proxy 极简面板",
         url=ui_index,
-        width=980,
+        width=520,
         height=660,
-        min_size=(800, 580),
+        min_size=(460, 580),
         resizable=True,
         text_select=True,  # Permit logs and token selection copy-pasting
         js_api=ApiBridge()

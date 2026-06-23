@@ -36,6 +36,10 @@ def run_build():
         "--onefile",
         "--windowed",
         "--clean",
+        "--collect-data=litellm",
+        "--collect-data=tiktoken",
+        "--hidden-import=tiktoken_ext",
+        "--hidden-import=tiktoken_ext.openai_public",
     ]
 
     # Include static UI files
